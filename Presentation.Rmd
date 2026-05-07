@@ -1,0 +1,626 @@
+---
+title: "Sevilla FC Strategy Dashboard"
+output:
+  html_document:
+    self_contained: false
+    theme: null
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE,
+  results = "asis"
+)
+
+library(plotly)
+library(htmlwidgets)
+library(htmltools)
+
+
+
+possible_code_files <- c("R_code.R")
+r_code_file <- possible_code_files[file.exists(possible_code_files)][1]
+if (is.na(r_code_file)) {
+  stop("No R code file was found. Put this Rmd file in the same folder as R_code.R or R_code_updated_for_submission.R before knitting.")
+}
+
+# -----------------------------
+# Robust data folder detection
+# -----------------------------
+
+possible_data_dirs <- c(
+  "Data",
+  "data",
+  ".",
+  "C:/Users/adnan/OneDrive/Desktop/sevilla_R/Data",
+  "C:/Users/adnan/OneDrive/Desktop/sevilla_R"
+)
+
+data_dir <- possible_data_dirs[
+  file.exists(file.path(possible_data_dirs, "Match.csv"))
+][1]
+
+if (is.na(data_dir)) {
+  stop(
+    "Could not find Match.csv. Please put the CSV files in a folder called 'Data' ",
+    "next to this Rmd file, or update possible_data_dirs with the correct path."
+  )
+}
+
+cat("Using data folder:", data_dir, "\n")
+# Use the folder that actually contains Match.csv.
+auto_data_dir <- normalizePath(data_dir, winslash = "/", mustWork = TRUE)
+
+code_lines <- readLines(r_code_file, warn = FALSE)
+if (!is.na(auto_data_dir)) {
+  idx <- grep('^\\s*data_dir\\s*<-\\s*"', code_lines)
+  if (length(idx) > 0) {
+    code_lines[idx[1]] <- paste0('data_dir <- "', auto_data_dir, '"')
+  }
+}
+
+invisible(capture.output(
+  eval(parse(text = paste(code_lines, collapse = "\n")), envir = knitr::knit_global())
+))
+
+required_objects <- c(
+  "interactive_spanish_teams",
+  "interactive_possession_bands",
+  "interactive_young_players"
+)
+missing_objects <- required_objects[!vapply(required_objects, exists, logical(1), envir = knitr::knit_global())]
+if (length(missing_objects) > 0) {
+  stop("The following Plotly objects were not created by R_code.R: ", paste(missing_objects, collapse = ", "))
+}
+
+widget_dir <- "vds_plotly_widgets_nocrop"
+if (!dir.exists(widget_dir)) dir.create(widget_dir, recursive = TRUE)
+
+# Prepare plot for full-screen embedding.
+# We keep the original visualisation but make Plotly responsive and give margins
+# that leave enough space for axis titles and annotations.
+prepare_plot <- function(p, margin = list(l = 95, r = 95, t = 95, b = 95)) {
+  p %>%
+    layout(
+      autosize = TRUE,
+      margin = margin,
+      paper_bgcolor = "white",
+      plot_bgcolor = "white"
+    ) %>%
+    config(
+      responsive = TRUE,
+      displaylogo = FALSE,
+      modeBarButtonsToRemove = c("lasso2d", "select2d")
+    )
+}
+
+# This patch is the important part: it forces the saved widget to exactly match
+# the iframe size. Plotly::Plots.resize alone sometimes keeps the old RStudio size,
+# causing the lower half to be clipped in knitted slides.
+patch_widget_html <- function(file) {
+  x <- readLines(file, warn = FALSE)
+  css_js <- paste0(
+    "\n<style>",
+    "html, body {width:100vw; height:100vh; margin:0; padding:0; overflow:hidden; background:white;}",
+    ".html-widget, .plotly, .plot-container, .svg-container {width:100vw !important; height:100vh !important;}",
+    "</style>\n",
+    "<script>",
+    "function fitPlotlyToWindow(){",
+    "  var w = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);",
+    "  var h = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);",
+    "  var widgets = document.querySelectorAll('.html-widget, .plotly, .plot-container, .svg-container');",
+    "  widgets.forEach(function(el){ el.style.width = w + 'px'; el.style.height = h + 'px'; });",
+    "  var gd = document.querySelector('.plotly');",
+    "  if(gd && window.Plotly){",
+    "    try { window.Plotly.relayout(gd, {width: w, height: h}); } catch(e) {}",
+    "    try { window.Plotly.Plots.resize(gd); } catch(e) {}",
+    "  }",
+    "}",
+    "window.addEventListener('load', function(){ fitPlotlyToWindow(); setTimeout(fitPlotlyToWindow, 200); setTimeout(fitPlotlyToWindow, 800); setTimeout(fitPlotlyToWindow, 1500); });",
+    "window.addEventListener('resize', fitPlotlyToWindow);",
+    "</script>\n"
+  )
+  x <- sub("</head>", paste0(css_js, "</head>"), x, fixed = TRUE)
+  writeLines(x, file)
+}
+
+save_full_widget <- function(p, filename, libdir, margin = list(l = 95, r = 95, t = 95, b = 95)) {
+  p <- prepare_plot(p, margin = margin)
+  p$sizingPolicy <- htmlwidgets::sizingPolicy(
+    browser.fill = TRUE,
+    viewer.fill = TRUE,
+    padding = 0,
+    defaultWidth = "100%",
+    defaultHeight = "100%"
+  )
+  file_path <- file.path(widget_dir, filename)
+  saveWidget(p, file = file_path, selfcontained = FALSE, libdir = libdir)
+  patch_widget_html(file_path)
+}
+
+save_full_widget(interactive_spanish_teams, "visual1_team_position.html", "visual1_files")
+
+# Rebuild the possession figure specifically for the HTML slides.
+# Reason: after knitting/iframe embedding, Plotly sometimes hides the bar trace
+# labels. This version uses Plotly annotations placed at the centre of each
+# stacked segment, so the percentages remain visible after knitting.
+# It also removes the external legend and replaces it with a compact inline
+# legend above the plot, avoiding the overlap/truncation problem.
+if (!exists("counts", envir = knitr::knit_global()) || !exists("summary_possession", envir = knitr::knit_global())) {
+  stop("counts and summary_possession were not created by R_code.R. Please run the original R code successfully first.")
+}
+
+result_order_slides <- c("Loss", "Draw", "Win")
+result_colors_slides <- c(
+  "Loss" = "#D71920",
+  "Draw" = "#F28E2B",
+  "Win"  = "#2CA02C"
+)
+
+counts_slides <- counts %>%
+  dplyr::mutate(
+    result = factor(as.character(result), levels = result_order_slides),
+    possession_band = factor(as.character(possession_band), levels = bands, ordered = TRUE),
+    pct_label = dplyr::if_else(
+      is.na(percentage) | percentage <= 0,
+      "",
+      paste0(round(percentage), "%")
+    ),
+    tooltip_slide = paste0(
+      "Possession band: ", possession_band,
+      "<br>Result: ", result,
+      "<br>Matches: ", count,
+      "<br>Total in band: ", total,
+      "<br>Share: ", round(percentage, 1), "%"
+    )
+  ) %>%
+  dplyr::arrange(possession_band, result)
+
+summary_slides <- summary_possession %>%
+  dplyr::mutate(
+    possession_band = factor(as.character(possession_band), levels = bands, ordered = TRUE),
+    top_label = paste0("n = ", n_matches, " | pts = ", round(avg_points, 2))
+  ) %>%
+  dplyr::arrange(possession_band)
+
+best_row_slides <- summary_slides %>%
+  dplyr::filter(avg_points == max(avg_points, na.rm = TRUE)) %>%
+  dplyr::slice(1)
+
+# Calculate annotation y-positions at the centre of each stacked segment.
+# This is more reliable than textposition = "inside" after knitting.
+annotation_data <- counts_slides %>%
+  dplyr::group_by(possession_band) %>%
+  dplyr::arrange(result, .by_group = TRUE) %>%
+  dplyr::mutate(
+    y_bottom = dplyr::lag(cumsum(percentage), default = 0),
+    y_mid = y_bottom + percentage / 2,
+    text_col = dplyr::case_when(
+      result == "Draw" ~ "#222222",
+      TRUE ~ "white"
+    )
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::filter(percentage > 0)
+
+pct_annotations <- lapply(seq_len(nrow(annotation_data)), function(i) {
+  list(
+    x = as.character(annotation_data$possession_band[i]),
+    y = annotation_data$y_mid[i],
+    text = annotation_data$pct_label[i],
+    showarrow = FALSE,
+    xanchor = "center",
+    yanchor = "middle",
+    font = list(
+      size = 15,
+      color = annotation_data$text_col[i],
+      family = "Arial"
+    )
+  )
+})
+
+top_annotations <- lapply(seq_len(nrow(summary_slides)), function(i) {
+  list(
+    x = as.character(summary_slides$possession_band[i]),
+    y = 103,
+    text = summary_slides$top_label[i],
+    showarrow = FALSE,
+    xanchor = "center",
+    yanchor = "bottom",
+    font = list(size = 12, color = "#222222", family = "Arial")
+  )
+})
+
+# Legend is kept as coloured square symbols in the Plotly subtitle.
+# This avoids using separate legend annotations, which overlapped with the title after knitting.
+best_annotation <- list(
+  list(
+    x = as.character(best_row_slides$possession_band),
+    y = 100,
+    text = paste0(
+      "Best band: ", as.character(best_row_slides$possession_band),
+      "<br>", round(best_row_slides$avg_points, 2), " pts/match"
+    ),
+    showarrow = TRUE,
+    ax = 70,
+    ay = -62,
+    arrowhead = 2,
+    arrowwidth = 1.2,
+    arrowcolor = "#333333",
+    font = list(size = 11, color = "#111111", family = "Arial")
+  )
+)
+
+possession_plot_for_slides <- plot_ly()
+
+for (res in result_order_slides) {
+  plot_data <- counts_slides %>% dplyr::filter(result == res)
+  possession_plot_for_slides <- possession_plot_for_slides %>%
+    add_trace(
+      data = plot_data,
+      x = ~possession_band,
+      y = ~percentage,
+      type = "bar",
+      name = res,
+      showlegend = FALSE,
+      marker = list(
+        color = result_colors_slides[[res]],
+        line = list(color = "white", width = 1)
+      ),
+      hoverinfo = "text",
+      hovertext = ~tooltip_slide,
+      cliponaxis = FALSE
+    )
+}
+
+possession_plot_for_slides <- possession_plot_for_slides %>%
+  layout(
+    barmode = "stack",
+    showlegend = FALSE,
+    title = list(
+      text = paste0(
+        "Sevilla FC results by possession band",
+        "<br><sup>",
+        "Win = 3 points | Draw = 1 point | Loss = 0 points",
+        "<br>",
+        "<span style='color:#D71920;font-size:16px;'>&#9632;</span> Loss &nbsp;&nbsp;",
+        "<span style='color:#F28E2B;font-size:16px;'>&#9632;</span> Draw &nbsp;&nbsp;",
+        "<span style='color:#2CA02C;font-size:16px;'>&#9632;</span> Win",
+        "</sup>"
+      ),
+      x = 0.5,
+      xanchor = "center"
+    ),
+    font = common_layout$font,
+    paper_bgcolor = common_layout$paper_bgcolor,
+    plot_bgcolor = common_layout$plot_bgcolor,
+    hoverlabel = common_layout$hoverlabel,
+    xaxis = c(
+      axis_style("Sevilla possession band"),
+      list(categoryorder = "array", categoryarray = bands)
+    ),
+    yaxis = c(
+      axis_style("Share of matches (%)"),
+      list(range = c(0, 116), ticksuffix = "%")
+    ),
+    annotations = c(
+      pct_annotations,
+      top_annotations,
+      best_annotation
+    ),
+    margin = list(t = 155, r = 70, b = 90, l = 90)
+  ) %>%
+  config(responsive = TRUE, displaylogo = FALSE)
+
+save_full_widget(
+  possession_plot_for_slides,
+  "visual2_possession.html",
+  "visual2_files",
+  margin = list(l = 90, r = 70, t = 155, b = 90)
+)
+
+save_full_widget(interactive_young_players, "visual3_players.html", "visual3_files")
+
+widget_path <- function(filename) file.path(widget_dir, filename)
+
+open_slide <- function(class = "") {
+  cat(sprintf('\n<section class="slide %s">\n', class))
+}
+close_slide <- function() cat('\n</section>\n')
+
+# Full-screen plot slide: no extra HTML title. The Plotly object already has a title.
+plot_slide <- function(src) {
+  cat('\n<section class="slide plot-slide">\n')
+  cat(sprintf('<iframe class="plot-iframe" src="%s" loading="eager"></iframe>\n', src))
+  cat('\n</section>\n')
+}
+```
+
+```{r css-and-js, results='asis'}
+cat('
+<style>
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: white;
+  font-family: Arial, Helvetica, sans-serif;
+}
+.main-container, .container-fluid, .container {
+  max-width: none !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+#header { display: none; }
+
+.slide {
+  display: none;
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  padding: 58px 76px 54px 76px;
+  background: white;
+  color: #111827;
+  overflow: hidden;
+}
+.slide.active { display: block; }
+.slide h1 {
+  margin: 0 0 18px 0;
+  font-size: 44px;
+  line-height: 1.12;
+  font-weight: 700;
+  color: #111827;
+}
+.slide h2 {
+  margin: 20px 0 12px 0;
+  font-size: 31px;
+  color: #1f2937;
+}
+.slide p, .slide li {
+  font-size: 27px;
+  line-height: 1.38;
+  color: #374151;
+}
+.kicker {
+  font-size: 23px !important;
+  letter-spacing: .02em;
+  color: #4f46e5 !important;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 42px;
+  align-items: start;
+}
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 24px 28px;
+  background: #f9fafb;
+}
+.takeaway {
+  margin-top: 26px;
+  padding: 18px 24px;
+  border-left: 9px solid #4f46e5;
+  background: #eef2ff;
+  border-radius: 12px;
+  font-size: 28px;
+  line-height: 1.35;
+  color: #1f2937;
+}
+.plot-slide {
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  background: white;
+}
+.plot-iframe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: white;
+}
+.nav {
+  position: fixed;
+  right: 18px;
+  bottom: 14px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: #4b5563;
+  background: rgba(255,255,255,0.72);
+  padding: 5px 7px;
+  border-radius: 10px;
+}
+.nav button {
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #111827;
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+}
+
+.hero {
+  font-size: 34px !important;
+  line-height: 1.25 !important;
+  max-width: 980px;
+  color: #1f2937 !important;
+}
+.goal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  margin-top: 26px;
+}
+.goal-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 22px 24px;
+  background: #f9fafb;
+  min-height: 170px;
+}
+.goal-card h2 { font-size: 26px; margin-top: 0; }
+.goal-card p { font-size: 23px; line-height: 1.32; }
+.big-number {
+  font-size: 44px;
+  font-weight: 800;
+  color: #4f46e5;
+  margin-bottom: 8px;
+}
+.checklist li { margin-bottom: 12px; }
+.compact li { font-size: 25px; margin-bottom: 10px; }
+
+.progress {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  height: 5px;
+  background: #4f46e5;
+  width: 0%;
+  z-index: 9998;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+  const slides = Array.from(document.querySelectorAll("section.slide"));
+  let idx = 0;
+  const progress = document.createElement("div");
+  progress.className = "progress";
+  document.body.appendChild(progress);
+  const nav = document.createElement("div");
+  nav.className = "nav";
+  nav.innerHTML = `<button id="prevSlide">◀</button><span id="slideCount"></span><button id="nextSlide">▶</button>`;
+  document.body.appendChild(nav);
+
+  function resizeIframePlot(iframe) {
+    if (!iframe) return;
+    iframe.style.width = window.innerWidth + "px";
+    iframe.style.height = window.innerHeight + "px";
+    try {
+      iframe.contentWindow.dispatchEvent(new Event("resize"));
+      if (iframe.contentWindow.fitPlotlyToWindow) iframe.contentWindow.fitPlotlyToWindow();
+    } catch(e) {}
+  }
+
+  function show(i){
+    idx = Math.max(0, Math.min(i, slides.length - 1));
+    slides.forEach((s, j) => s.classList.toggle("active", j === idx));
+    document.getElementById("slideCount").textContent = (idx + 1) + " / " + slides.length;
+    progress.style.width = (((idx + 1) / slides.length) * 100) + "%";
+    resizeIframePlot(slides[idx].querySelector("iframe"));
+    setTimeout(() => resizeIframePlot(slides[idx].querySelector("iframe")), 250);
+    setTimeout(() => resizeIframePlot(slides[idx].querySelector("iframe")), 900);
+  }
+
+  document.getElementById("prevSlide").onclick = () => show(idx - 1);
+  document.getElementById("nextSlide").onclick = () => show(idx + 1);
+  document.addEventListener("keydown", function(e){
+    if(["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); show(idx + 1); }
+    if(["ArrowLeft", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); show(idx - 1); }
+  });
+  window.addEventListener("resize", () => show(idx));
+  show(0);
+});
+</script>
+')
+```
+
+
+```{r slide-1, results='asis'}
+open_slide()
+```
+
+<p class="kicker">Group 7 · Football dataset · Sevilla FC</p>
+
+# Sevilla FC strategy dashboard
+
+<p class="hero">Our project uses the European football dataset from 2008 to 2016 to support one practical strategy question for Sevilla FC.</p>
+
+<div class="goal-grid">
+<div class="goal-card">
+<div class="big-number">1</div>
+<h2>Attack & defence</h2>
+<p>How does Sevilla compare with Spanish teams?</p>
+</div>
+<div class="goal-card">
+<div class="big-number">2</div>
+<h2>Possession</h2>
+<p>Which possession bands are linked to better outcomes?</p>
+</div>
+<div class="goal-card">
+<div class="big-number">3</div>
+<h2>Recruitment</h2>
+<p>Which young players could be promising targets for 2016?</p>
+</div>
+</div>
+
+```{r slide-1-close, results='asis'}
+close_slide()
+```
+
+```{r slide-2, results='asis'}
+cat('\n<section class="slide plot-slide">\n')
+cat(sprintf('<iframe class="plot-iframe" src="%s" loading="eager"></iframe>\n', widget_path("visual1_team_position.html")))
+cat('\n</section>\n')
+```
+
+```{r slide-3, results='asis'}
+cat('\n<section class="slide plot-slide">\n')
+cat(sprintf('<iframe class="plot-iframe" src="%s" loading="eager"></iframe>\n', widget_path("visual2_possession.html")))
+cat('\n</section>\n')
+```
+
+```{r slide-4, results='asis'}
+cat('\n<section class="slide plot-slide">\n')
+cat(sprintf('<iframe class="plot-iframe" src="%s" loading="eager"></iframe>\n', widget_path("visual3_players.html")))
+cat('\n</section>\n')
+```
+
+```{r slide-5, results='asis'}
+open_slide()
+```
+
+# Conclusion
+
+<div class="goal-grid">
+<div class="goal-card">
+<h2>Team level</h2>
+<p>Sevilla is positioned against Spanish teams using attack, defence, and points context.</p>
+</div>
+<div class="goal-card">
+<h2>Match level</h2>
+<p>Possession is interpreted through wins, draws, losses, and average points.</p>
+</div>
+<div class="goal-card">
+<h2>Player level</h2>
+<p>Recruitment is supported by age, potential, and attacking contribution.</p>
+</div>
+</div>
+
+<div class="takeaway">Together, the visuals move from <strong>team performance</strong>, to <strong>tactical interpretation</strong>, to <strong>possible player recruitment</strong>.</div>
+
+```{r slide-5-close, results='asis'}
+close_slide()
+```

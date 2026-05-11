@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Sevilla FC Strategy Dashboard</title>
+
+<script src="Presentation_files/header-attrs-2.31/header-attrs.js"></script>
+<link href="Presentation_files/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="Presentation_files/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Sevilla FC Strategy Dashboard</h1>
+
+
+
+<style>
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: white;
+  font-family: Arial, Helvetica, sans-serif;
+}
+.main-container, .container-fluid, .container {
+  max-width: none !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+#header { display: none; }
+
+.slide {
+  display: none;
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  padding: 58px 76px 54px 76px;
+  background: white;
+  color: #111827;
+  overflow: hidden;
+}
+.slide.active { display: block; }
+.slide h1 {
+  margin: 0 0 18px 0;
+  font-size: 44px;
+  line-height: 1.12;
+  font-weight: 700;
+  color: #111827;
+}
+.slide h2 {
+  margin: 20px 0 12px 0;
+  font-size: 31px;
+  color: #1f2937;
+}
+.slide p, .slide li {
+  font-size: 27px;
+  line-height: 1.38;
+  color: #374151;
+}
+.kicker {
+  font-size: 23px !important;
+  letter-spacing: .02em;
+  color: #4f46e5 !important;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 42px;
+  align-items: start;
+}
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 24px 28px;
+  background: #f9fafb;
+}
+.takeaway {
+  margin-top: 26px;
+  padding: 18px 24px;
+  border-left: 9px solid #4f46e5;
+  background: #eef2ff;
+  border-radius: 12px;
+  font-size: 28px;
+  line-height: 1.35;
+  color: #1f2937;
+}
+.plot-slide {
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  background: white;
+}
+.plot-iframe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: white;
+}
+.nav {
+  position: fixed;
+  right: 18px;
+  bottom: 14px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: #4b5563;
+  background: rgba(255,255,255,0.72);
+  padding: 5px 7px;
+  border-radius: 10px;
+}
+.nav button {
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #111827;
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+}
+
+.hero {
+  font-size: 34px !important;
+  line-height: 1.25 !important;
+  max-width: 980px;
+  color: #1f2937 !important;
+}
+.goal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  margin-top: 26px;
+}
+.goal-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 22px 24px;
+  background: #f9fafb;
+  min-height: 170px;
+}
+.goal-card h2 { font-size: 26px; margin-top: 0; }
+.goal-card p { font-size: 23px; line-height: 1.32; }
+.big-number {
+  font-size: 44px;
+  font-weight: 800;
+  color: #4f46e5;
+  margin-bottom: 8px;
+}
+.checklist li { margin-bottom: 12px; }
+.compact li { font-size: 25px; margin-bottom: 10px; }
+
+.progress {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  height: 5px;
+  background: #4f46e5;
+  width: 0%;
+  z-index: 9998;
+}
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+  const slides = Array.from(document.querySelectorAll("section.slide"));
+  let idx = 0;
+  const progress = document.createElement("div");
+  progress.className = "progress";
+  document.body.appendChild(progress);
+  const nav = document.createElement("div");
+  nav.className = "nav";
+  nav.innerHTML = `<button id="prevSlide">◀</button><span id="slideCount"></span><button id="nextSlide">▶</button>`;
+  document.body.appendChild(nav);
+
+  function resizeIframePlot(iframe) {
+    if (!iframe) return;
+    iframe.style.width = window.innerWidth + "px";
+    iframe.style.height = window.innerHeight + "px";
+    try {
+      iframe.contentWindow.dispatchEvent(new Event("resize"));
+      if (iframe.contentWindow.fitPlotlyToWindow) iframe.contentWindow.fitPlotlyToWindow();
+    } catch(e) {}
+  }
+
+  function show(i){
+    idx = Math.max(0, Math.min(i, slides.length - 1));
+    slides.forEach((s, j) => s.classList.toggle("active", j === idx));
+    document.getElementById("slideCount").textContent = (idx + 1) + " / " + slides.length;
+    progress.style.width = (((idx + 1) / slides.length) * 100) + "%";
+    resizeIframePlot(slides[idx].querySelector("iframe"));
+    setTimeout(() => resizeIframePlot(slides[idx].querySelector("iframe")), 250);
+    setTimeout(() => resizeIframePlot(slides[idx].querySelector("iframe")), 900);
+  }
+
+  document.getElementById("prevSlide").onclick = () => show(idx - 1);
+  document.getElementById("nextSlide").onclick = () => show(idx + 1);
+  document.addEventListener("keydown", function(e){
+    if(["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); show(idx + 1); }
+    if(["ArrowLeft", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); show(idx - 1); }
+  });
+  window.addEventListener("resize", () => show(idx));
+  show(0);
+});
+</script>
+<section class="slide ">
+<p class="kicker">
+Group 7 · Football dataset · Sevilla FC
+</p>
+<div id="sevilla-fc-strategy-dashboard" class="section level1">
+<h1>Sevilla FC strategy dashboard</h1>
+<p class="hero">
+Our project uses the European football dataset from 2008 to 2016 to
+support one practical strategy question for Sevilla FC.
+</p>
+<div class="goal-grid">
+<div class="goal-card">
+<div class="big-number">
+1
+</div>
+<h2>
+Attack &amp; defence
+</h2>
+<p>
+How does Sevilla compare with Spanish teams?
+</p>
+</div>
+<div class="goal-card">
+<div class="big-number">
+2
+</div>
+<h2>
+Possession
+</h2>
+<p>
+Which possession bands are linked to better outcomes?
+</p>
+</div>
+<div class="goal-card">
+<div class="big-number">
+3
+</div>
+<h2>
+Recruitment
+</h2>
+<p>
+Which young players could be promising targets for 2016?
+</p>
+</div>
+</div>
+</section>
+<section class="slide plot-slide">
+<iframe class="plot-iframe" src="vds_plotly_widgets_nocrop/visual1_team_position.html" loading="eager">
+</iframe>
+</section>
+<section class="slide plot-slide">
+<iframe class="plot-iframe" src="vds_plotly_widgets_nocrop/visual2_possession.html" loading="eager">
+</iframe>
+</section>
+<section class="slide plot-slide">
+<iframe class="plot-iframe" src="vds_plotly_widgets_nocrop/visual3_players.html" loading="eager">
+</iframe>
+</section>
+<section class="slide ">
+</div>
+<div id="conclusion" class="section level1">
+<h1>Conclusion</h1>
+<div class="goal-grid">
+<div class="goal-card">
+<h2>
+Team level
+</h2>
+<p>
+Sevilla is positioned against Spanish teams using attack, defence, and
+points context.
+</p>
+</div>
+<div class="goal-card">
+<h2>
+Match level
+</h2>
+<p>
+Possession is interpreted through wins, draws, losses, and average
+points.
+</p>
+</div>
+<div class="goal-card">
+<h2>
+Player level
+</h2>
+<p>
+Recruitment is supported by age, potential, and attacking contribution.
+</p>
+</div>
+</div>
+<div class="takeaway">
+Together, the visuals move from <strong>team performance</strong>, to
+<strong>tactical interpretation</strong>, to <strong>possible player
+recruitment</strong>.
+</div>
+</section>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
